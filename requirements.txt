@@ -1,0 +1,6 @@
+requests
+rocketry
+toml
+loguru
+jmespath
+influxdb
