@@ -1,6 +1,8 @@
+pydantic<2
 requests
 rocketry
 toml
 loguru
 jmespath
 influxdb
+dynaconf
