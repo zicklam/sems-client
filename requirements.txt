@@ -4,5 +4,5 @@ rocketry
 toml
 loguru
 jmespath
-influxdb
+influxdb-client
 dynaconf

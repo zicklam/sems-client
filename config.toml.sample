@@ -5,10 +5,11 @@ plant_id = "aabbbccc-0123-4567-9876-a1b2c3d4e5f6"
 period = 60   # SEMS doesn't update more often than 1x per minute
 
 [influxdb]
-host = "localhost"
-port = 8086
-database = "goodwe"
+url = "http://localhost:8086"
+organization = "my-org"
+bucket = "goodwe"
 measurement = "sems"
+token = "..."
 
 [values]
 ## Power plant stats

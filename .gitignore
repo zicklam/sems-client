@@ -1,3 +1,5 @@
+.venv
+config.toml
 
 # Ignore dynaconf secret files
 .secrets.*

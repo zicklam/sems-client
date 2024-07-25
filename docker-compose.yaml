@@ -1,0 +1,25 @@
+version: '2'
+
+services:
+  sems-client:
+    image: sems-client:local
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+    environment:
+      TZ: Pacific/Auckland
+      CONFIG_INFLUXDB__HOST: influxdb
+      #CONFIG_SEMS__USERNAME: sems-visitor@example.com
+      #CONFIG_SEMS__PASSWORD: Passw0rd
+      #CONFIG_SEMS__PLANT_ID: aabbbccc-0123-4567-9876-a1b2c3d4e5f6
+    volumes:
+      - ./dump:/src/dump
+    command: /src/sems-client.py --save-json-dir=/src/dump
+
+  influxdb:
+    image: influxdb:1.8
+    volumes:
+      - influxdb:/var/lib/influxdb
+
+volumes:
+  influxdb:

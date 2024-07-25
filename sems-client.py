@@ -14,7 +14,9 @@ from datetime import datetime
 import requests
 import jmespath
 
-from influxdb import InfluxDBClient
+from influxdb_client import InfluxDBClient, Point, WritePrecision
+from influxdb_client.client.write_api import SYNCHRONOUS
+
 from rocketry import Rocketry
 from loguru import logger
 
@@ -162,14 +164,18 @@ class SemsProcessor:
             self.config.sems.plant_id,
         )
 
-        self.influx = InfluxDBClient(
-            host=self.config.influxdb.host, port=self.config.influxdb.port
+        influx_client = InfluxDBClient(
+            url=self.config.influxdb.url,
+            organization=self.config.influxdb.organization,
+            token=self.config.influxdb.token,
         )
-        self.influx.create_database(self.config.influxdb.database)
-        self.influx.switch_database(self.config.influxdb.database)
-        logger.success(
-            f"Connected to InfluxDB {self.influx.ping()} at {self.config.influxdb.host}:{self.config.influxdb.port}"
-        )
+        influx_ready = influx_client.ready()
+        if influx_ready.status != "ready":
+            logger.error(f"Failed to connect to InfluxDB: {self.config.influxdb.url}")
+            sys.exit(1)
+        logger.success(f"Connected to InfluxDB at {self.config.influxdb.url} (server uptime: {influx_ready.up})")
+
+        self.influx_writer = influx_client.write_api(write_options=SYNCHRONOUS)
 
     def run(self):
         app = Rocketry(execution="thread")
@@ -207,22 +213,19 @@ class SemsProcessor:
             timestamp, out_data = self.parse_data(sems_data)
             logger.info(f"{timestamp} {out_data}")
 
-            influx_data = [
-                {
-                    "measurement": self.config.influxdb.measurement,
-                    "time": timestamp,
-                    "fields": out_data,
-                }
-            ]
-            logger.debug(influx_data)
-            self.influx.write_points(influx_data, time_precision='s')
+            # Write to InfluxDBv2
+            point = Point(self.config.influxdb.measurement).time(timestamp, WritePrecision.S)
+            for key in out_data:
+                point.field(key, out_data[key])
+            self.influx_writer.write(self.config.influxdb.bucket, self.config.influxdb.organization, point)
 
         except Exception as ex:
             logger.exception(ex)
 
+
 def parse_arguments(config):
     parser = argparse.ArgumentParser()
-    parser.add_argument("--debug", help="Print debug messages")
+    parser.add_argument("--debug", action="store_true", help="Print debug messages")
     parser.add_argument("--save-json-dir", metavar="DIR", help="Save the received JSON files to this directory")
 
     group_sems = parser.add_argument_group("GoodWe SEMS Portal options")
@@ -232,9 +235,10 @@ def parse_arguments(config):
     group_sems.add_argument("--sems-period", metavar="PERIOD", default=config.sems.period, type=int, help="Query SEMS Portal this often (in seconds). Also $CONFIG_SEMS__PERIOD")
 
     group_influxdb = parser.add_argument_group("InfluxDB options")
-    group_influxdb.add_argument("--influxdb-host", metavar="HOST", default=config.influxdb.host or 'localhost', help="InfluxDB host name. Default is 'localhost'. Also $CONFIG_INFLUXDB__HOST")
-    group_influxdb.add_argument("--influxdb-port", metavar="PORT", default=config.influxdb.port or 8086, type=int, help="InfluxDB port. Default is 8086. Also $CONFIG_INFLUXDB__PORT")
-    group_influxdb.add_argument("--influxdb-database", metavar="DATABASE", default=config.influxdb.database, help="InfluxDB database name. Will be created if not existing. Also $CONFIG_INFLUXDB__DATABASE")
+    group_influxdb.add_argument("--influxdb-url", metavar="URL", default=config.influxdb.url or "http://localhost:8086", help="InfluxDB connection URL. Default is 'http://localhost:8086'. Also $CONFIG_INFLUXDB__HOST")
+    group_influxdb.add_argument("--influxdb-token", metavar="TOKEN", default=config.influxdb.token, type=str, help="InfluxDB access token. Also $CONFIG_INFLUXDB__TOKEN")
+    group_influxdb.add_argument("--influxdb-organization", metavar="ORG", default=config.influxdb.organization, help="InfluxDB organization name. Also $CONFIG_INFLUXDB__ORGANIZATION")
+    group_influxdb.add_argument("--influxdb-bucket", metavar="BUCKET", default=config.influxdb.bucket, help="InfluxDB bucket name. Also $CONFIG_INFLUXDB__BUCKET")
     group_influxdb.add_argument("--influxdb-measurement", metavar="MEASUREMENT", default=config.influxdb.measurement, help="InfluxDB measurement name. Also $CONFIG_INFLUXDB__MEASUREMENT")
 
     args = parser.parse_args()
@@ -245,9 +249,10 @@ def parse_arguments(config):
     config.sems.plant_id = args.sems_plant_id
     config.sems.period = args.sems_period
 
-    config.influxdb.host = args.influxdb_host
-    config.influxdb.port = args.influxdb_port
-    config.influxdb.database = args.influxdb_database
+    config.influxdb.url = args.influxdb_url
+    config.influxdb.organization = args.influxdb_organization
+    config.influxdb.bucket = args.influxdb_bucket
+    config.influxdb.token = args.influxdb_token
     config.influxdb.measurement = args.influxdb_measurement
 
     config.save_json_dir = args.save_json_dir
