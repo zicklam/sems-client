@@ -1,25 +1,36 @@
-version: '2'
-
 services:
   sems-client:
-    image: sems-client:local
+    # image: sems-client-v2:local
     build:
       context: .
       dockerfile: ./Dockerfile
+    volumes:
+      - ./config.toml:/src/config.toml:ro
     environment:
-      TZ: Pacific/Auckland
-      CONFIG_INFLUXDB__HOST: influxdb
+      TZ: Pacific/Auckland  # Set the timezone to your local timezone
+      CONFIG_INFLUXDB__URL: http://influxdb:8086
+      CONFIG_INFLUXDB__ORG: org1
+      CONFIG_INFLUXDB__BUCKET: bucket1
+      CONFIG_INFLUXDB__TOKEN: my-token
       #CONFIG_SEMS__USERNAME: sems-visitor@example.com
       #CONFIG_SEMS__PASSWORD: Passw0rd
       #CONFIG_SEMS__PLANT_ID: aabbbccc-0123-4567-9876-a1b2c3d4e5f6
-    volumes:
-      - ./dump:/src/dump
-    command: /src/sems-client.py --save-json-dir=/src/dump
+    command: /src/sems-client.py
 
   influxdb:
-    image: influxdb:1.8
+    image: influxdb:2
     volumes:
-      - influxdb:/var/lib/influxdb
+      - influxdb-data:/var/lib/influxdb2
+    ports:
+      - "18086:8086"
+    environment:
+      TZ: Pacific/Auckland  # Set the timezone to your local timezone
+      DOCKER_INFLUXDB_INIT_MODE: setup
+      DOCKER_INFLUXDB_INIT_USERNAME: admin
+      DOCKER_INFLUXDB_INIT_PASSWORD: Passw0rd
+      DOCKER_INFLUXDB_INIT_ORG: org1
+      DOCKER_INFLUXDB_INIT_BUCKET: bucket1
+      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: my-token
 
 volumes:
-  influxdb:
+  influxdb-data:
