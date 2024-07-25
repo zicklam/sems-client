@@ -201,10 +201,11 @@ class SemsProcessor:
 
     def save_json(self, sems_data):
         if config.save_json_dir:
-            timestamp = int(time.time())
-            filename = f"{config.save_json_dir}/{timestamp}.json"
-            json.dump(sems_data, open(filename, "wt"))
-            logger.info(f"Wrote: {filename}")
+            today = datetime.now().strftime("%Y-%m-%d")
+            filename = f"{config.save_json_dir}/{today}.jsonl"
+            with open(filename, "at+") as f:
+                print(json.dumps(sems_data), file=f)    # To ensure a newline at the end
+            logger.info(f"Updated: {filename}")
 
     def data_task(self):
         try:
