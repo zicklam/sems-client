@@ -190,7 +190,16 @@ class SemsProcessor:
 
         ## Parse all required values
         for key in self.config["values"]:
-            out_data[key] = jmespath.search(self.config["values"][key], sems_data)
+            value = self.config["values"][key]
+            out_data[key] = jmespath.search(value, sems_data)
+
+            # Powerflow has a specific format, e.g. "3550(W)",
+            # and the power flow direction is in {...}Status field
+            if value.startswith("powerflow") and out_data[key].endswith("(W)"):
+                flow_direction = jmespath.search(value + "Status", sems_data)
+                # Flow direction seems the other way around, fix it :)
+                flow_direction *= -1
+                out_data[key] = float(out_data[key][:-3]) * flow_direction
 
         ## Parse the timestamp
         info_time = jmespath.search("info.time", sems_data)
