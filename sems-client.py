@@ -19,8 +19,43 @@ from influxdb_client.client.write_api import SYNCHRONOUS
 
 from rocketry import Rocketry
 from loguru import logger
+from dotwiz import DotWiz
 
 from dynaconf import Dynaconf
+
+
+METRICS = DotWiz({
+    ## Power plant stats
+    "d_pv_sum": "energeStatisticsCharts.sum",                   # Today total PV generation
+    "d_pv_use": "energeStatisticsCharts.selfUseOfPv",           # Today PV consumption
+    "d_sell": "energeStatisticsCharts.sell",                    # Today PV excess sell
+    "d_buy": "energeStatisticsCharts.buy",                      # Today buy from Grid
+    "d_use": "energeStatisticsCharts.consumptionOfLoad",        # Today total consumption
+
+    ## Powerflow stats
+    "p_pv": "powerflow.pv",             # Current PV generation
+    "p_load": "powerflow.load",         # Current load
+    "p_grid": "powerflow.grid",         # Current grid
+    #"p_battery": "powerflow.bettery",  # Current battery load (yes, it's 'bettery' in the API)
+
+    ## Invertor-specific stats
+    # Any 'jmespath' expression is allowed. If you've got 2 or more invertors
+    # you can select them e.g. using their serial number:
+    #   "vdc1": "inverter[?sn==`58500MSU123X9876`]|[0].d.vpv1"
+    # With a single inverter a simple "inverter[0].d.vpv1" will do.
+    "vdc1": "inverter[0].d.vpv1",     # MPPT 1 voltage
+    "vdc2": "inverter[0].d.vpv2",     # MPPT 2 voltage
+    "vdc3": "inverter[0].d.vpv3",     # MPPT 3 voltage
+
+    "idc1": "inverter[0].d.ipv1",     # MPPT 1 current
+    "idc2": "inverter[0].d.ipv2",     # MPPT 2 current
+    "idc3": "inverter[0].d.ipv3",     # MPPT 3 current
+
+    "vac": "inverter[0].d.vac1",      # AC voltage
+    "iac": "inverter[0].d.iac1",      # AC current
+    "fac": "inverter[0].d.fac1",      # AC frequency
+    "pac": "inverter[0].d.pac",       # AC power
+})
 
 config = Dynaconf(
     envvar_prefix="CONFIG",
@@ -42,20 +77,10 @@ class SemsApi:
     }
 
     def __init__(self, username, password, plant_id):
-        """Init dummy hub."""
         self._username = username
         self._password = password
         self._plant_id = plant_id
         self._token = None
-
-    def test_authentication(self) -> bool:
-        """Test if we can authenticate with the host."""
-        try:
-            self._token = self.getLoginToken()
-            return self._token is not None
-        except Exception as exception:
-            logger.exception("SEMS Authentication exception " + exception)
-            return False
 
     def login(self):
         logger.debug("Login to SEMS portal")
@@ -189,17 +214,26 @@ class SemsProcessor:
         out_data = {}
 
         ## Parse all required values
-        for key in self.config["values"]:
-            value = self.config["values"][key]
+        for key in METRICS:
+            value = METRICS[key]
             out_data[key] = jmespath.search(value, sems_data)
 
-            # Powerflow has a specific format, e.g. "3550(W)",
-            # and the power flow direction is in {...}Status field
+            # Powerflow is reported as a string, e.g. "3503(W)"
             if value.startswith("powerflow") and out_data[key].endswith("(W)"):
-                flow_direction = jmespath.search(value + "Status", sems_data)
-                # Flow direction seems the other way around, fix it :)
-                flow_direction *= -1
-                out_data[key] = float(out_data[key][:-3]) * flow_direction
+                out_data[key] = int(out_data[key][:-3])
+
+                # Filter out noise
+                if abs(out_data[key]) < 10:
+                    out_data[key] = 0
+
+                # The grid flow direction seems to be indicated by loadStatus field,
+                # who knows what gridStatus is for then...
+                # This is brain-dead (as is most of this API).
+                if key == "powerflow.grid":
+                    flow_direction = jmespath.search("powerflow.loadStatus", sems_data)
+                    out_data[key] *= flow_direction
+
+                # I don't have a PV battery, not sure how the powerflows are reported for it.
 
         ## Parse the timestamp
         info_time = jmespath.search("info.time", sems_data)
@@ -214,7 +248,7 @@ class SemsProcessor:
             filename = f"{config.save_json_dir}/{today}.jsonl"
             with open(filename, "at+") as f:
                 print(json.dumps(sems_data), file=f)    # To ensure a newline at the end
-            logger.info(f"Updated: {filename}")
+            logger.debug(f"Updated: {filename}")
 
     def data_task(self):
         try:

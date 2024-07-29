@@ -6,3 +6,4 @@ loguru
 jmespath
 influxdb-client
 dynaconf
+dotwiz

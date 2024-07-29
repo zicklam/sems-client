@@ -10,34 +10,3 @@ organization = "my-org"
 bucket = "goodwe"
 measurement = "sems"
 token = "..."
-
-[values]
-## Power plant stats
-d_pv_sum = "energeStatisticsCharts.sum"                   # Today total PV generation
-d_pv_use = "energeStatisticsCharts.selfUseOfPv"           # Today PV consumption
-d_sell = "energeStatisticsCharts.sell"                    # Today PV excess sell
-d_buy = "energeStatisticsCharts.buy"                      # Today buy from Grid
-d_use = "energeStatisticsCharts.consumptionOfLoad"        # Today total consumption
-
-## Powerflow stats
-p_pv = "powerflow.pv"			# Current PV generation
-p_load = "powerflow.load"		# Current load
-p_grid = "powerflow.grid"		# Current grid (positive = from grid, negative = to grid)
-p_battery = "powerflow.bettery"		# Current battery load (yes, it's 'bettery' in the API)
-
-## Invertor-specific stats
-# Any 'jmespath' expression is allowed. If you've got 2 or more invertors
-# you can select them e.g. using their serial number:
-#   vdc1 = "inverter[?sn==`58500MSU123X9876`]|[0].d.vpv1"
-# With a single inverter a simple "inverter[0].d.vpv1" will do.
-vdc1 = "inverter[0].d.vpv1"     # MPPT 1 voltage
-vdc2 = "inverter[0].d.vpv2"     # MPPT 2 voltage
-vdc3 = "inverter[0].d.vpv3"     # MPPT 3 voltage
-
-idc1 = "inverter[0].d.ipv1"     # MPPT 1 current
-idc2 = "inverter[0].d.ipv2"     # MPPT 2 current
-idc3 = "inverter[0].d.ipv3"     # MPPT 3 current
-
-vac = "inverter[0].d.vac1"      # AC voltage
-iac = "inverter[0].d.iac1"      # AC current
-pac = "inverter[0].d.pac"       # AC power
