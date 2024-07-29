@@ -1,5 +1,10 @@
-.venv
+# Ignore the real config, distribute config.toml.sample
 config.toml
 
 # Ignore dynaconf secret files
 .secrets.*
+
+# Ignore local python dirs
+.venv
+__pycache__
+
