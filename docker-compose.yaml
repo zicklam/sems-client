@@ -24,6 +24,7 @@ services:
       - "18086:8086"
     environment:
       TZ: Pacific/Auckland  # Set the timezone to your local timezone
+      INFLUXD_SESSION_LENGTH: 1440
       DOCKER_INFLUXDB_INIT_MODE: setup
       DOCKER_INFLUXDB_INIT_USERNAME: admin
       DOCKER_INFLUXDB_INIT_PASSWORD: Passw0rd

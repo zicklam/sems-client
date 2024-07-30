@@ -38,33 +38,43 @@ METRICS = DotWiz({
 
 def parse_data(sems_data):
     out_data = {}
+
+    ## Parse the timestamp
+    info_time = jmespath.search("info.time", sems_data)
+    # The time in 'info.time' is apparently in our local timezone
+    timestamp = datetime.strptime(info_time, "%m/%d/%Y %H:%M:%S").timestamp()
+
     ## Parse all required values
     for key in METRICS:
         value = METRICS[key]
         out_data[key] = jmespath.search(value, sems_data)
 
         # Powerflow is reported as a string, e.g. "3503(W)"
-        if value.startswith("powerflow") and out_data[key].endswith("(W)"):
-            out_data[key] = float(out_data[key][:-3])
-
-            # Filter out noise
-            if abs(out_data[key]) < 10:
-                out_data[key] = 0.0
+        if value.startswith("powerflow"):
+            if not out_data[key]:
+                # Sometimes the API returns None or empty string for powerflow values
+                del out_data[key]
                 continue
 
-            # The grid flow direction seems to be indicated by loadStatus field,
-            # who knows what gridStatus is for then...
-            # This is brain-dead (as is most of this API).
-            if value == "powerflow.grid":
-                flow_direction = jmespath.search("powerflow.loadStatus", sems_data)
-                out_data[key] *= flow_direction
+            if out_data[key].endswith("(W)"):
+                out_data[key] = int(out_data[key][:-3])
 
-            # I don't have a PV battery, not sure how the powerflows are reported for it.
+                # Filter out noise
+                if abs(out_data[key]) < 10:
+                    out_data[key] = 0
+                    continue
 
-    ## Parse the timestamp
-    info_time = jmespath.search("info.time", sems_data)
-    # The time in 'info.time' is apparently in our local timezone
-    timestamp = datetime.strptime(info_time, "%m/%d/%Y %H:%M:%S").timestamp()
+                # The grid flow direction seems to be indicated by loadStatus field,
+                # who knows what gridStatus is for then...
+                # I don't have a PV battery, not sure how the powerflows are reported for it.
+                # This is brain-dead (as is most of this API).
+                if value == "powerflow.grid":
+                    flow_direction = jmespath.search("powerflow.loadStatus", sems_data)
+                    out_data[key] *= flow_direction
+
+            if type(out_data[key]) != int:
+                print(f"Type error: {info_time}: {key}: '{out_data[key]}'")
+                del out_data[key]
 
     return int(timestamp), out_data
 

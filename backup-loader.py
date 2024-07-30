@@ -8,8 +8,8 @@ import json
 import argparse
 from datetime import datetime
 
-from influxdb_client import InfluxDBClient
-from influxdb_client.client.write_api import SYNCHRONOUS
+from influxdb_client import InfluxDBClient, WriteOptions
+from influxdb_client.client.write_api import WriteType
 
 from loguru import logger
 
@@ -39,7 +39,9 @@ class BackupLoader:
                 sys.exit(1)
             logger.success(f"Connected to InfluxDB at {self.config.influxdb.url} (server uptime: {influx_ready.up})")
 
-            self.influx_writer = influx_client.write_api(write_options=SYNCHRONOUS)
+            self.influx_writer = influx_client.write_api(
+                write_options=WriteOptions(write_type=WriteType.batching, batch_size=50_000, flush_interval=10_000)
+            )
 
     def load_data(self, f):
         n_records = 0
@@ -49,7 +51,7 @@ class BackupLoader:
                 if not sems_data:
                     continue
                 timestamp, out_data = parse_data(sems_data)
-                logger.info(f"{timestamp} {out_data}")
+                # logger.info(f"{timestamp} {out_data}")
 
                 n_records += 1
 
@@ -64,6 +66,11 @@ class BackupLoader:
             logger.exception(ex)
 
         return n_records
+
+    def close(self):
+        if not self.config.dry_run:
+            logger.info("Closing InfluxDB writer")
+            self.influx_writer.close()
 
 def parse_arguments(config):
     parser = argparse.ArgumentParser()
@@ -111,4 +118,7 @@ if __name__ == "__main__":
         data_file = open(args.file, "rt")
 
     n_records = backup_loader.load_data(data_file)
-    print(f"Loaded {n_records} records")
+
+    backup_loader.close()
+
+    logger.success(f"Loaded {n_records} records")
