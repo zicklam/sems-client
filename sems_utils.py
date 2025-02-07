@@ -57,7 +57,7 @@ def parse_data(sems_data):
                 continue
 
             if out_data[key].endswith("(W)"):
-                out_data[key] = float(out_data[key][:-3])
+                out_data[key] = int(float(out_data[key][:-3]))
 
                 # Filter out noise
                 if abs(out_data[key]) < 10:
@@ -72,7 +72,7 @@ def parse_data(sems_data):
                     flow_direction = jmespath.search("powerflow.loadStatus", sems_data)
                     out_data[key] *= flow_direction
 
-            if type(out_data[key]) != float:
+            if type(out_data[key]) != int:
                 print(f"Type error: {info_time}: {key}: '{out_data[key]}'")
                 del out_data[key]
 
