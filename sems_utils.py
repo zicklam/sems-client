@@ -57,7 +57,7 @@ def parse_data(sems_data):
                 continue
 
             if out_data[key].endswith("(W)"):
-                out_data[key] = int(out_data[key][:-3])
+                out_data[key] = int(float(out_data[key][:-3]))
 
                 # Filter out noise
                 if abs(out_data[key]) < 10:
