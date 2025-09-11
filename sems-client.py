@@ -16,6 +16,7 @@ import jmespath
 
 from influxdb_client import InfluxDBClient
 from influxdb_client.client.write_api import SYNCHRONOUS
+from influxdb_client.rest import ApiException as InfluxDBApiException
 
 from rocketry import Rocketry
 from loguru import logger
@@ -87,8 +88,17 @@ class SemsApi:
             logger.debug(f"SEMS - API Token received: {tokenDict}")
             return tokenDict
 
-        except Exception as exception:
-            logger.exception(f"Unable to fetch login token from SEMS API. {exception}")
+        except requests.exceptions.Timeout as ex:
+            logger.error(f"Login request timed out: {ex}")
+            return None
+        except requests.exceptions.ConnectionError as ex:
+            logger.error(f"Failed to connect to SEMS login API: {ex}")
+            return None
+        except requests.exceptions.RequestException as ex:
+            logger.error(f"Login request failed: {ex}")
+            return None
+        except Exception as ex:
+            logger.error(f"Unexpected error during login: {ex}")
             return None
 
     def getData(self, powerStationId=None, renewToken=False, maxTokenRetries=2):
@@ -150,8 +160,18 @@ class SemsApi:
         except OutOfRetries:
             # Re-raise OutOfRetries to be handled by the caller
             raise
-        except Exception as exception:
-            logger.exception(f"Unable to fetch data from SEMS: {exception}")
+        except requests.exceptions.Timeout as ex:
+            logger.error(f"SEMS API request timed out: {ex}")
+            return None
+        except requests.exceptions.ConnectionError as ex:
+            logger.error(f"Failed to connect to SEMS API: {ex}")
+            return None
+        except requests.exceptions.RequestException as ex:
+            logger.error(f"SEMS API request failed: {ex}")
+            return None
+        except Exception as ex:
+            logger.error(f"Unexpected error while fetching SEMS data: {ex}")
+            return None
 
 
 class OutOfRetries(Exception):
@@ -199,6 +219,10 @@ class SemsProcessor:
     def data_task(self):
         try:
             sems_data = self.sems.getData()
+            if sems_data is None:
+                logger.error("No data received from SEMS API.")
+                return
+
             self.save_json(sems_data)
             timestamp, out_data = parse_data(sems_data)
             logger.info(f"{timestamp} {out_data}")
@@ -208,9 +232,22 @@ class SemsProcessor:
             self.influx_writer.write(self.config.influxdb.bucket, self.config.influxdb.organization, point)
 
         except OutOfRetries:
-            logger.error("Failed to retrieve data from SEMS after maximum retry attempts. Will try again on next scheduled run.")
+            logger.error("Failed to retrieve data from SEMS after maximum retry attempts.")
+        except requests.exceptions.Timeout:
+            logger.error("SEMS API request timed out.")
+        except requests.exceptions.ConnectionError:
+            logger.error("Failed to connect to SEMS API.")
+        except requests.exceptions.RequestException as ex:
+            logger.error(f"SEMS API request failed: {ex}.")
+        except InfluxDBApiException as ex:
+            if ex.status == 401:
+                logger.error("InfluxDB authentication failed. Please check your InfluxDB token configuration.")
+            elif ex.status == 404:
+                logger.error("InfluxDB bucket or organization not found. Please check your InfluxDB configuration.")
+            else:
+                logger.error(f"InfluxDB error ({ex.status}): {ex.reason}.")
         except Exception as ex:
-            logger.exception(ex)
+            logger.error(f"Unexpected error during data processing: {ex}.")
 
 
 def parse_arguments(config):
