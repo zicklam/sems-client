@@ -104,6 +104,10 @@ class SemsApi:
             if self._token is None or renewToken:
                 logger.debug("API token not set or new token requested, fetching")
                 self.login()
+                # Check if login was successful
+                if self._token is None:
+                    logger.error("Login failed, unable to get valid token")
+                    raise OutOfRetries
 
             # Prepare Power Station status Headers
             headers = {
@@ -128,11 +132,14 @@ class SemsApi:
                 timeout=self._RequestTimeout,
             )
             jsonResponse = response.json()
-            # try again and renew token is unsuccessful
+            # try again and renew token if unsuccessful
             if jsonResponse["msg"] != "success" or jsonResponse["data"] is None:
                 logger.debug(f"Query not successful: {jsonResponse['msg']}")
+                if maxTokenRetries <= 1:
+                    logger.warning("SEMS - Maximum token fetch tries reached, aborting")
+                    raise OutOfRetries
                 logger.debug(
-                    f"Retrying with new token, {maxTokenRetries} retries remaining"
+                    f"Retrying with new token, {maxTokenRetries - 1} retries remaining"
                 )
                 return self.getData(
                     powerStationId, renewToken=True, maxTokenRetries=maxTokenRetries - 1
@@ -140,6 +147,9 @@ class SemsApi:
 
             return jsonResponse["data"]
 
+        except OutOfRetries:
+            # Re-raise OutOfRetries to be handled by the caller
+            raise
         except Exception as exception:
             logger.exception(f"Unable to fetch data from SEMS: {exception}")
 
@@ -197,6 +207,8 @@ class SemsProcessor:
             point = create_point(self.config.influxdb.measurement, timestamp, out_data)
             self.influx_writer.write(self.config.influxdb.bucket, self.config.influxdb.organization, point)
 
+        except OutOfRetries:
+            logger.error("Failed to retrieve data from SEMS after maximum retry attempts. Will try again on next scheduled run.")
         except Exception as ex:
             logger.exception(ex)
 

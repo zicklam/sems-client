@@ -1,6 +1,6 @@
-pydantic<2
-requests
+pydantic<2	# rocketry doesn't work with pydantic > 1.x
 rocketry
+requests
 toml
 loguru
 jmespath
