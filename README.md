@@ -41,6 +41,13 @@ container will be built from the source it's two-step process:
 Now you can open the url http://localhost:18086 and login with the credentials
 given in the `DOCKER_INFLUXDB_INIT_*` values in the docker compose file.
 
+## Grafana dashboard
+
+For your inspiration this is my Grafana dashboard showing all the important
+solar PV metrics.
+
+![Grafana PV Dashboard](grafana/grafana-pv-dashboard.png)
+
 ## Enjoy!
 
 Let me know if you've found this useful. Pull requests with improvements are
