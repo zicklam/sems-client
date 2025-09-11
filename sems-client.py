@@ -51,6 +51,23 @@ class SemsApi:
         self._plant_id = plant_id
         self._token = None
 
+    def _is_success_response(self, json_response):
+        """Check if the API response indicates success.
+        
+        Handles different response formats and languages:
+        - English: success, successful, Success, Successful
+        - Chinese: 操作成功 (Operation successful)
+        
+        Args:
+            json_response: The JSON response from the API
+            
+        Returns:
+            bool: True if the response indicates success and has data, False otherwise
+        """
+        success_messages = ["success", "successful", "Success", "Successful", "操作成功"]
+        msg = json_response.get("msg", "")
+        return msg in success_messages and json_response.get("data") is not None
+
     def login(self):
         logger.debug("Login to SEMS portal")
         self._token = self.getLoginToken()
@@ -80,6 +97,13 @@ class SemsApi:
 
             # Process response as JSON
             jsonResponse = login_response.json()
+            logger.debug(f"Login JSON Response: {jsonResponse}")
+
+            # Check if login was successful - handle different response formats and languages
+            if not self._is_success_response(jsonResponse):
+                logger.error(f"Login failed: {jsonResponse.get('msg', 'Unknown error')}")
+                return None
+
             # Get all the details from our response, needed to make the next POST request (the one that really fetches the data)
             # Also store the api url send with the authentication request for later use
             tokenDict = jsonResponse["data"]
@@ -141,9 +165,14 @@ class SemsApi:
                 data=data,
                 timeout=self._RequestTimeout,
             )
+            logger.debug(f"Power station API response status: {response.status_code}")
+            logger.debug(f"Power station API response headers: {dict(response.headers)}")
+            logger.debug(f"Power station API response body: {response.text}")
+
             jsonResponse = response.json()
-            # try again and renew token if unsuccessful
-            if jsonResponse["msg"] != "success" or jsonResponse["data"] is None:
+
+            # try again and renew token if unsuccessful - handle different response formats and languages
+            if not self._is_success_response(jsonResponse):
                 logger.debug(f"Query not successful: {jsonResponse['msg']}")
                 if maxTokenRetries <= 1:
                     logger.warning("SEMS - Maximum token fetch tries reached, aborting")
